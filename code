@@ -1,0 +1,110 @@
+import tkinter as tk
+from tkinter import filedialog
+from PIL import ImageGrab, ImageTk, Image
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from tensorflow.keras.models import load_model
+import joblib
+
+class StockPredictorApp:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("Stock Predictor App")
+
+        self.snip_button = tk.Button(master, text="Snip", command=self.snip)
+        self.snip_button.pack(pady=10)
+
+        self.canvas = tk.Canvas(master)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Load the pre-trained models
+        self.cnn_model = load_model('model2023part2.h5')  # Replace with your CNN model file
+        self.rf_model = self.load_rf_model()
+
+        # Create a label for displaying main prediction
+        self.prediction_label = tk.Label(master, text="", font=('Helvetica', 36), bg='white')
+        self.prediction_label.pack(pady=10)
+
+        # Create a label for displaying additional prediction
+        self.additional_label = tk.Label(master, text="", font=('Helvetica', 24), bg='white', fg='blue')
+        self.additional_label.pack(side=tk.RIGHT, padx=10)
+
+    def snip(self):
+        # Hide the main window to capture the screen
+        self.master.iconify()
+
+        # Wait for a short moment to minimize the window completely
+        self.master.after(200)
+
+        # Capture the screen
+        screenshot = ImageGrab.grab()
+
+        # Show the main window again
+        self.master.deiconify()
+
+        # Delay the creation of PhotoImage to avoid "Too early to create image" error
+        self.master.after(200, lambda: self.process_screenshot(screenshot))
+
+    def process_screenshot(self, screenshot):
+        # Convert the screenshot to a Tkinter PhotoImage
+        screenshot_tk = ImageTk.PhotoImage(screenshot)
+
+        # Display the screenshot on the canvas
+        self.canvas.config(width=screenshot.width, height=screenshot.height)
+        self.canvas.create_image(0, 0, anchor=tk.NW, image=screenshot_tk)
+
+        # Ask the user to save the screenshot
+        file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
+
+        if file_path:
+            screenshot.save(file_path)
+
+            # Process the snipped image
+            chart_data = self.process_image(file_path)
+
+            # Predict using the CNN model
+            cnn_prediction = self.cnn_model.predict(np.expand_dims(chart_data, axis=0))
+
+            # Predict using the Random Forest model
+            rf_prediction = self.rf_model.predict([chart_data])
+
+            # Combine predictions (you may adjust this based on your actual models)
+            main_prediction = 'BUY' if cnn_prediction[0][0] > 0.5 and rf_prediction[0] == 1 else 'SELL'
+
+            print("Combined Prediction:", main_prediction)
+
+            # Display the main prediction
+            self.display_main_prediction(main_prediction)
+
+            # Display the additional prediction
+            self.display_additional_prediction()
+
+    def process_image(self, file_path):
+        img = Image.open(file_path)
+        img = img.resize((100, 100))  # Adjust the size as needed
+        img = np.array(img)
+        img = img.flatten()
+
+        return img
+
+    def load_rf_model(self):
+        # Load your pre-trained Random Forest model
+        # Replace the following line with your actual model loading code
+        model_path = 'your_rf_model.joblib'  # Replace with the actual path to your RandomForest model
+        rf_model = joblib.load(model_path)
+        return rf_model
+
+    def display_main_prediction(self, prediction):
+        # Update the main prediction label text, color, and position
+        self.prediction_label.config(text=prediction, bg='green' if prediction == 'BUY' else 'red')
+        self.prediction_label.place(relx=0.5, rely=0.5, anchor='center')
+
+    def display_additional_prediction(self):
+        # Update the additional prediction label text
+        self.additional_label.config(text="Additional: Something", bg='white')
+        # You can add logic here to set the text based on your requirements
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = StockPredictorApp(root)
+    root.mainloop()
